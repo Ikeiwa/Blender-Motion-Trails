@@ -397,7 +397,6 @@ def calc_callback(self, context):
                     speeds.append(dloc)
                     prev_loc = loc
             
-            print("FREEZE TEST START")
             # calculate color of path
             if context.window_manager.motion_trail.path_style == 'speed':
                 speeds.sort()
@@ -431,7 +430,6 @@ def calc_callback(self, context):
                     else:
                         path[i][2] = [1.0, 1.0, 0.0]
             self.paths[display_ob.name] = path
-            print("FREEZE FIXED")
             '''
             # get keyframes and handles
             keyframes = {}
@@ -604,7 +602,7 @@ def calc_callback(self, context):
                                 action_ob, child]
                                 )
                 self.timebeads[display_ob.name] = timebeads
-
+            '''
             # add frame positions to click-list
             if context.window_manager.motion_trail.frame_display:
                 path = self.paths[display_ob.name]
@@ -619,7 +617,7 @@ def calc_callback(self, context):
 
             if context.scene.frame_current != frame_old:
                 context.scene.frame_set(frame_old)
-            '''
+
         context.preferences.edit.use_global_undo = global_undo
         
     except:
