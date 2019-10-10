@@ -182,8 +182,8 @@ def world_to_screen(context, vector):
 # calculate location of display_ob in worldspace
 def get_location(frame, display_ob, offset_ob, curves):
     if offset_ob:
-        '''FREEZE BLENDER
-        bpy.context.scene.frame_set(frame)'''
+        bpy.context.scene.frame_set(frame)
+
         display_mat = getattr(display_ob, "matrix", False)
         if not display_mat:
             # posebones have "matrix", objects have "matrix_world"
@@ -319,7 +319,6 @@ def calc_callback(self, context):
         context.preferences.edit.use_global_undo = False
 
         for action_ob, child, offset_ob in objects:
-            '''FREEZE BLENDER
             if selection_change:
                 if not child:
                     self.edit_bones[action_ob.name] = None
@@ -329,7 +328,7 @@ def calc_callback(self, context):
                     mat = editbones[child.name].matrix.copy().to_3x3().inverted()
                     bpy.ops.object.mode_set(mode='POSE')
                     self.edit_bones[child.name] = mat
-            '''
+
             if not action_ob.animation_data:
                 continue
             curves = get_curves(action_ob, child)
@@ -369,13 +368,11 @@ def calc_callback(self, context):
                 if display_ob.name not in self.cached["path"]:
                     self.cached["path"][display_ob.name] = {}
             
-            '''FREEZE BLENDER
             if use_cache and range_min - 1 in self.cached["path"][display_ob.name]:
                 prev_loc = self.cached["path"][display_ob.name][range_min - 1]
             else:
                 prev_loc = get_location(range_min - 1, display_ob, offset_ob, curves)
                 self.cached["path"][display_ob.name][range_min - 1] = prev_loc
-            '''
 
             for frame in range(range_min, range_max + 1, step):
                 if use_cache and frame in self.cached["path"][display_ob.name]:
@@ -430,7 +427,7 @@ def calc_callback(self, context):
                     else:
                         path[i][2] = [1.0, 1.0, 0.0]
             self.paths[display_ob.name] = path
-            '''
+
             # get keyframes and handles
             keyframes = {}
             handle_difs = {}
@@ -602,7 +599,7 @@ def calc_callback(self, context):
                                 action_ob, child]
                                 )
                 self.timebeads[display_ob.name] = timebeads
-            '''
+
             # add frame positions to click-list
             if context.window_manager.motion_trail.frame_display:
                 path = self.paths[display_ob.name]
@@ -685,36 +682,37 @@ def draw_callback(self, context):
                     self.vertices.append((int(halfway[0]), int(halfway[1])))
                     self.batch = batch_for_shader(self.shader,'LINE_STRIP',{"pos":self.vertices})
                     self.batch.draw(self.shader)
-    '''
+
     # draw frames
     if context.window_manager.motion_trail.frame_display:
-        bgl.glColor4f(1.0, 1.0, 1.0, 1.0)
-        bgl.glPointSize(1)
-        bgl.glBegin(bgl.GL_POINTS)
+        selected_keyframe_points = []
+        frame_points = []
+
         for objectname, path in self.paths.items():
             for x, y, color, frame, action_ob, child in path:
                 if frame < limit_min or frame > limit_max:
                     continue
                 if self.active_frame and objectname == self.active_frame[0] \
                 and abs(frame - self.active_frame[1]) < 1e-4:
-                    bgl.glEnd()
-                    bgl.glColor4f(1.0, 0.5, 0.0, 1.0)
-                    bgl.glPointSize(3)
-                    bgl.glBegin(bgl.GL_POINTS)
-                    bgl.glVertex2i(x, y)
-                    bgl.glEnd()
-                    bgl.glColor4f(1.0, 1.0, 1.0, 1.0)
-                    bgl.glPointSize(1)
-                    bgl.glBegin(bgl.GL_POINTS)
+                    selected_keyframe_points.append((x,y))
                 else:
-                    bgl.glVertex2i(x, y)
-        bgl.glEnd()
+                    frame_points.append((x,y))
+
+        self.shader.uniform_float("color",(1.0, 0.5, 0.0, 1.0))
+        self.batch = batch_for_shader(self.shader, "POINTS", {"pos": selected_keyframe_points})
+        bgl.glPointSize(3)
+        self.batch.draw(self.shader)
+
+        self.shader.uniform_float("color",(1.0, 1.0, 1.0, 1.0))
+        self.batch = batch_for_shader(self.shader, "POINTS", {"pos": frame_points})
+        bgl.glPointSize(1)
+        self.batch.draw(self.shader)
 
     # time beads are shown in speed and timing modes
     if context.window_manager.motion_trail.mode in ('speed', 'timing'):
-        bgl.glColor4f(0.0, 1.0, 0.0, 1.0)
-        bgl.glPointSize(4)
-        bgl.glBegin(bgl.GL_POINTS)
+        active_timebead_points = []
+        timebead_points = []
+
         for objectname, values in self.timebeads.items():
             for frame, coords in values.items():
                 if frame < limit_min or frame > limit_max:
@@ -722,23 +720,30 @@ def draw_callback(self, context):
                 if self.active_timebead and \
                 objectname == self.active_timebead[0] and \
                 abs(frame - self.active_timebead[1]) < 1e-4:
-                    bgl.glEnd()
-                    bgl.glColor4f(1.0, 0.5, 0.0, 1.0)
-                    bgl.glBegin(bgl.GL_POINTS)
-                    bgl.glVertex2i(coords[0], coords[1])
-                    bgl.glEnd()
-                    bgl.glColor4f(0.0, 1.0, 0.0, 1.0)
-                    bgl.glBegin(bgl.GL_POINTS)
+                    active_timebead_points.append((coords[0], coords[1]))
                 else:
-                    bgl.glVertex2i(coords[0], coords[1])
-        bgl.glEnd()
+                    timebead_points.append((coords[0], coords[1]))
+
+        bgl.glPointSize(4)
+
+        self.shader.uniform_float("color",(1.0, 0.5, 0.0, 1.0))
+        self.batch = batch_for_shader(self.shader, "POINTS", {"pos": active_timebead_points})
+        self.batch.draw(self.shader)
+
+        self.shader.uniform_float("color",(0.0, 1.0, 0.0, 1.0))
+        self.batch = batch_for_shader(self.shader, "POINTS", {"pos": timebead_points})
+        self.batch.draw(self.shader)
 
     # handles are only shown in location mode
     if context.window_manager.motion_trail.mode == 'location':
         # draw handle-lines
-        bgl.glColor4f(0.0, 0.0, 0.0, 1.0)
-        bgl.glLineWidth(1)
-        bgl.glBegin(bgl.GL_LINES)
+        #bgl.glColor4f(0.0, 0.0, 0.0, 1.0)
+        #bgl.glLineWidth(1)
+        #bgl.glBegin(bgl.GL_LINES)
+
+        active_handle_lines = []
+        handle_lines = []
+
         for objectname, values in self.handles.items():
             for frame, sides in values.items():
                 if frame < limit_min or frame > limit_max:
@@ -748,25 +753,37 @@ def draw_callback(self, context):
                     objectname == self.active_handle[0] and \
                     side == self.active_handle[2] and \
                     abs(frame - self.active_handle[1]) < 1e-4:
-                        bgl.glEnd()
-                        bgl.glColor4f(.75, 0.25, 0.0, 1.0)
-                        bgl.glBegin(bgl.GL_LINES)
-                        bgl.glVertex2i(self.keyframes[objectname][frame][0],
-                            self.keyframes[objectname][frame][1])
-                        bgl.glVertex2i(coords[0], coords[1])
-                        bgl.glEnd()
-                        bgl.glColor4f(0.0, 0.0, 0.0, 1.0)
-                        bgl.glBegin(bgl.GL_LINES)
+                        #bgl.glEnd()
+                        #bgl.glColor4f(.75, 0.25, 0.0, 1.0)
+                        #bgl.glBegin(bgl.GL_LINES)
+                        #bgl.glVertex2i(self.keyframes[objectname][frame][0],
+                        #    self.keyframes[objectname][frame][1])
+                        #bgl.glVertex2i(coords[0], coords[1])
+                        active_handle_lines.append((self.keyframes[objectname][frame][0], self.keyframes[objectname][frame][1]))
+                        active_handle_lines.append((coords[0], coords[1]))
+                        #bgl.glEnd()
+                        #bgl.glColor4f(0.0, 0.0, 0.0, 1.0)
+                        #bgl.glBegin(bgl.GL_LINES)
                     else:
-                        bgl.glVertex2i(self.keyframes[objectname][frame][0],
-                            self.keyframes[objectname][frame][1])
-                        bgl.glVertex2i(coords[0], coords[1])
-        bgl.glEnd()
+                        handle_lines.append((self.keyframes[objectname][frame][0], self.keyframes[objectname][frame][1]))
+                        handle_lines.append((coords[0], coords[1]))
+                        #bgl.glVertex2i(self.keyframes[objectname][frame][0],
+                        #    self.keyframes[objectname][frame][1])
+                        #bgl.glVertex2i(coords[0], coords[1])
+        #bgl.glEnd()
+
+        self.shader.uniform_float("color",(0.75, 0.25, 0.0, 1.0))
+        self.batch = batch_for_shader(self.shader, 'LINES', {"pos": active_handle_lines})
+        self.batch.draw(self.shader)
+
+        self.shader.uniform_float("color",(0.0, 0.0, 0.0, 1.0))
+        self.batch = batch_for_shader(self.shader, 'LINES', {"pos": handle_lines})
+        self.batch.draw(self.shader)
 
         # draw handles
-        bgl.glColor4f(1.0, 1.0, 0.0, 1.0)
-        bgl.glPointSize(4)
-        bgl.glBegin(bgl.GL_POINTS)
+        active_handle_points = []
+        handle_points = []
+
         for objectname, values in self.handles.items():
             for frame, sides in values.items():
                 if frame < limit_min or frame > limit_max:
@@ -776,21 +793,24 @@ def draw_callback(self, context):
                     objectname == self.active_handle[0] and \
                     side == self.active_handle[2] and \
                     abs(frame - self.active_handle[1]) < 1e-4:
-                        bgl.glEnd()
-                        bgl.glColor4f(1.0, 0.5, 0.0, 1.0)
-                        bgl.glBegin(bgl.GL_POINTS)
-                        bgl.glVertex2i(coords[0], coords[1])
-                        bgl.glEnd()
-                        bgl.glColor4f(1.0, 1.0, 0.0, 1.0)
-                        bgl.glBegin(bgl.GL_POINTS)
+                        active_handle_points.append((coords[0], coords[1]))
                     else:
-                        bgl.glVertex2i(coords[0], coords[1])
-        bgl.glEnd()
+                        handle_points.append((coords[0], coords[1]))
+
+        bgl.glPointSize(4)
+
+        self.shader.uniform_float("color",(1.0, 0.5, 0.0, 1.0))
+        self.batch = batch_for_shader(self.shader, "POINTS", {"pos": active_handle_points})
+        self.batch.draw(self.shader)
+
+        self.shader.uniform_float("color",(1.0, 1.0, 0.0, 1.0))
+        self.batch = batch_for_shader(self.shader, "POINTS", {"pos": handle_points})
+        self.batch.draw(self.shader)
 
     # draw keyframes
-    bgl.glColor4f(1.0, 1.0, 0.0, 1.0)
-    bgl.glPointSize(6)
-    bgl.glBegin(bgl.GL_POINTS)
+    active_keyframe_points = []
+    keyframe_points = []
+
     for objectname, values in self.keyframes.items():
         for frame, coords in values.items():
             if frame < limit_min or frame > limit_max:
@@ -798,21 +818,24 @@ def draw_callback(self, context):
             if self.active_keyframe and \
             objectname == self.active_keyframe[0] and \
             abs(frame - self.active_keyframe[1]) < 1e-4:
-                bgl.glEnd()
-                bgl.glColor4f(1.0, 0.5, 0.0, 1.0)
-                bgl.glBegin(bgl.GL_POINTS)
-                bgl.glVertex2i(coords[0], coords[1])
-                bgl.glEnd()
-                bgl.glColor4f(1.0, 1.0, 0.0, 1.0)
-                bgl.glBegin(bgl.GL_POINTS)
+                active_keyframe_points.append((coords[0], coords[1]))
             else:
-                bgl.glVertex2i(coords[0], coords[1])
-    bgl.glEnd()
+                keyframe_points.append((coords[0], coords[1]))
+
+    bgl.glPointSize(6)
+
+    self.shader.uniform_float("color",(1.0, 0.5, 0.0, 1.0))
+    self.batch = batch_for_shader(self.shader, "POINTS", {"pos": active_keyframe_points})
+    self.batch.draw(self.shader)
+
+    self.shader.uniform_float("color",(1.0, 1.0, 0.0, 1.0))
+    self.batch = batch_for_shader(self.shader, "POINTS", {"pos": keyframe_points})
+    self.batch.draw(self.shader)
 
     # draw keyframe-numbers
     if context.window_manager.motion_trail.keyframe_numbers:
         blf.size(0, 12, 72)
-        bgl.glColor4f(1.0, 1.0, 0.0, 1.0)
+        blf.color(0, 1.0, 1.0, 0.0, 1.0)
         for objectname, values in self.keyframes.items():
             for frame, coords in values.items():
                 if frame < limit_min or frame > limit_max:
@@ -828,12 +851,13 @@ def draw_callback(self, context):
                 if self.active_keyframe and \
                 objectname == self.active_keyframe[0] and \
                 abs(frame - self.active_keyframe[1]) < 1e-4:
-                    bgl.glColor4f(1.0, 0.5, 0.0, 1.0)
+                    blf.color(0, 1.0, 0.5, 0.0, 1.0)
                     blf.draw(0, text)
-                    bgl.glColor4f(1.0, 1.0, 0.0, 1.0)
+                    blf.color(0, 1.0, 1.0, 0.0, 1.0)
                 else:
                     blf.draw(0, text)
-    '''
+        bpy.context.area.tag_redraw()
+
     # restore opengl defaults
     bgl.glLineWidth(1)
     bgl.glPointSize(1)
@@ -1456,7 +1480,7 @@ class MotionTrailOperator(bpy.types.Operator):
         not self.drag and not event.shift and not event.alt and not \
         event.ctrl:
             # select
-            treshold = 10
+            threshold = 10
             clicked = mathutils.Vector([event.mouse_region_x,
                 event.mouse_region_y])
             self.active_keyframe = False
@@ -1490,7 +1514,8 @@ class MotionTrailOperator(bpy.types.Operator):
                 for frame, type, coord, action_ob, child in values:
                     if frame < frame_min or frame > frame_max:
                         continue
-                    if (coord - clicked).length <= treshold:
+
+                    if (coord - clicked).length <= threshold:
                         found = True
                         if type == "keyframe":
                             self.active_keyframe = [objectname, frame, frame,
@@ -1510,9 +1535,9 @@ class MotionTrailOperator(bpy.types.Operator):
                         break
             if not found:
                 context.window_manager.motion_trail.handle_type_enabled = False
+
                 # no motion trail selections, so pass on to normal select()
-                if bpy.ops.view3d.select.poll():
-                    bpy.ops.view3d.select('INVOKE_DEFAULT')
+                return {"PASS_THROUGH"}
             else:
                 handle_type = get_handle_type(self.active_keyframe,
                     self.active_handle)
@@ -1524,6 +1549,12 @@ class MotionTrailOperator(bpy.types.Operator):
                 else:
                     context.window_manager.motion_trail.handle_type_enabled = \
                         False
+
+            # swallow event
+            # 
+            # does context.area check below need to happen?
+            return {'RUNNING_MODAL'}
+
         elif event.type == 'LEFTMOUSE' and event.value == 'PRESS' and \
         self.drag:
             # stop drag
@@ -1623,12 +1654,11 @@ class MotionTrailOperator(bpy.types.Operator):
             return {'FINISHED'}
 
 
-class MotionTrailPanel(bpy.types.Panel):
+class PANEL_PT_MotionTrail(bpy.types.Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_label = "Motion Trail"
-    bl_options = {'DEFAULT_CLOSED'}
-    bl_category = "Animations"
+    bl_category = "MotionTrail"
 
     @classmethod
     def poll(cls, context):
@@ -1823,7 +1853,7 @@ class MotionTrailProps(bpy.types.PropertyGroup):
 classes = (
         MotionTrailProps,
         MotionTrailOperator,
-        MotionTrailPanel,
+        PANEL_PT_MotionTrail,
         )
 
 
